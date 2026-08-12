@@ -1,0 +1,2289 @@
+﻿@page "/trazabilityCFM"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.QuickGrid
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Linq.Expressions
+@using TrazabilityBrasil.Models
+@using TrazabilityBrasil.Data
+@inject IDbContextFactory<ConexionesBral> DbFactory
+@implements IAsyncDisposable
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<PageTitle>B15Bal Records</PageTitle>
+
+<div class="container-fluid">
+    <!-- Fila 1: Comboboxes (izq) y checkboxes (der) -->
+    <div class="row mb-4">
+        <!-- Izquierda: Comboboxes/Input -->
+        <div class="col-md-6">
+            <div class="form-group mb-3">
+                <label for="filterType">Filter Type</label>
+                <InputSelect id="filterType" class="form-select"
+                             @bind-Value="SelectedFilterType">
+                    <option value="">-- Select Filter Type --</option>
+                    <option value="Time">Time</option>
+                    <option value="Day">Day</option>
+                    <option value="Month">Month</option>
+                    <option value="Interval">Interval</option>
+                    <option value="Motor">Motor</option>
+                </InputSelect>
+            </div>
+
+            @if (SelectedFilterType == "Interval")
+            {
+                <div class="form-group mb-3">
+                    <label for="intervalStart">Interval Start</label>
+                    <InputText id="intervalStart"
+                               class="form-control"
+                               @bind-Value="IntervalStart"
+                               placeholder="Start Time (14 digits)"
+                               maxlength="14"
+                               @oninput="OnIntervalStartChanged"
+                               @onkeydown="HandleKeyDownIntervalStart" />
+                    @if (!string.IsNullOrEmpty(IntervalStartError))
+                    {
+                        <div class="text-danger">@IntervalStartError</div>
+                    }
+                </div>
+                <div class="form-group mb-3">
+                    <label for="intervalEnd">Interval End</label>
+                    <InputText id="intervalEnd"
+                               class="form-control"
+                               @bind-Value="IntervalEnd"
+                               placeholder="End Time (14 digits)"
+                               maxlength="14"
+                               @oninput="OnIntervalEndChanged"
+                               @onkeydown="HandleKeyDownIntervalEnd" />
+                    @if (!string.IsNullOrEmpty(IntervalEndError))
+                    {
+                        <div class="text-danger">@IntervalEndError</div>
+                    }
+                </div>
+            }
+            else if (!string.IsNullOrEmpty(SelectedFilterType))
+            {
+                <div class="form-group mb-3">
+                    <label for="filterValue">Value</label>
+                    <InputText id="filterValue"
+                               class="form-control"
+                               @bind-Value="FilterValue"
+                               placeholder="@GetFilterPlaceholder()"
+                               maxlength="@GetFilterMaxLength()"
+                               @oninput="OnFilterValueChanged"
+                               @onkeydown="HandleKeyDown" />
+                    @if (!string.IsNullOrEmpty(FilterValueError))
+                    {
+                        <div class="text-danger">@FilterValueError</div>
+                    }
+                </div>
+            }
+
+            <div class="form-group mb-3">
+                <label for="cellSelect">Cell</label>
+                <InputSelect id="cellSelect" class="form-select"
+                             @bind-Value="SelectedCell">
+                    <option value="">-- Select Cell --</option>
+                    <option value="C">Celda 1</option>
+                    <option value="B">Celda 2</option>
+                    <option value="A">Celda 4</option>
+                </InputSelect>
+            </div>
+
+            <div class="form-group mb-3">
+                <button class="btn btn-primary" @onclick="ApplyFilters">
+                    Apply Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Derecha: Checkboxes -->
+        <div class="col-md-6">
+            <h5>Show Columns</h5>
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-primary me-2"
+                        @onclick="SelectAllColumns">
+                    Select All
+                </button>
+                <button class="btn btn-sm btn-outline-secondary"
+                        @onclick="DeselectAllColumns">
+                    Deselect All
+                </button>
+            </div>
+            <div class="row">
+                <!-- Grupo 1 -->
+                <div class="col-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowTime" @onchange="@(e => { ShowTime = (bool)e.Value; StateHasChanged(); })" id="chkTime" />
+                        <label class="form-check-label" for="chkTime">Time</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowUser" @onchange="@(e => { ShowUser = (bool)e.Value; StateHasChanged(); })" id="chkUser" />
+                        <label class="form-check-label" for="chkUser">User</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowMotorCode" @onchange="@(e => { ShowMotorCode = (bool)e.Value; StateHasChanged(); })" id="chkMotorCode" />
+                        <label class="form-check-label" for="chkMotorCode">Motor Code</label>
+                    </div>
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowFinalStatus" @onchange="@(e => { ShowFinalStatus = (bool)e.Value; StateHasChanged(); })" id="chkFinalStatus" />
+                        <label class="form-check-label" for="chkFinalStatus">Final Status</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowVoltage" @onchange="@(e => { ShowVoltage = (bool)e.Value; StateHasChanged(); })" id="chkVoltage" />
+                        <label class="form-check-label" for="chkVoltage">Voltage</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowCurrent" @onchange="@(e => { ShowCurrent = (bool)e.Value; StateHasChanged(); })" id="chkCurrent" />
+                        <label class="form-check-label" for="chkCurrent">Current</label>
+                    </div>
+                </div>
+
+                <!-- Grupo 2 -->
+                <div class="col-3">
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowSpeed" @onchange="@(e => { ShowSpeed = (bool)e.Value; StateHasChanged(); })" id="chkSpeed" />
+                        <label class="form-check-label" for="chkSpeed">Speed</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowStaticValue" @onchange="@(e => { ShowStaticValue = (bool)e.Value; StateHasChanged(); })" id="chkStaticValue" />
+                        <label class="form-check-label" for="chkStaticValue">Static</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowStaticAngle" @onchange="@(e => { ShowStaticAngle = (bool)e.Value; StateHasChanged(); })" id="chkStaticAngle" />
+                        <label class="form-check-label" for="chkStaticAngle">Static Angle</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowCouple" @onchange="@(e => { ShowCouple = (bool)e.Value; StateHasChanged(); })" id="chkCouple" />
+                        <label class="form-check-label" for="chkCouple">Couple</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowCoupleAngle" @onchange="@(e => { ShowCoupleAngle = (bool)e.Value; StateHasChanged(); })" id="chkCoupleAngle" />
+                        <label class="form-check-label" for="chkCoupleAngle">Couple Angle</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowUnbalance" @onchange="@(e => { ShowUnbalance = (bool)e.Value; StateHasChanged(); })" id="chkUnbalance" />
+                        <label class="form-check-label" for="chkUnbalance">Unbalance</label>
+                    </div>
+                </div>
+
+                <!-- Grupo 3 -->
+                <div class="col-3">
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowCycleTime" @onchange="@(e => { ShowCycleTime = (bool)e.Value; StateHasChanged(); })" id="chkCycleTime" />
+                        <label class="form-check-label" for="chkCycleTime">Cycle Time</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowPlane1" @onchange="@(e => { ShowPlane1 = (bool)e.Value; StateHasChanged(); })" id="chkPlane1" />
+                        <label class="form-check-label" for="chkPlane1">Plane 1</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowUnbalancePlane2" @onchange="@(e => { ShowUnbalancePlane2 = (bool)e.Value; StateHasChanged(); })" id="chkUnbalancePlane2" />
+                        <label class="form-check-label" for="chkUnbalancePlane2">Unbalance Plane 2</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowPlane2" @onchange="@(e => { ShowPlane2 = (bool)e.Value; StateHasChanged(); })" id="chkPlane2" />
+                        <label class="form-check-label" for="chkPlane2">Plane 2</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowBalancingSpeed" @onchange="@(e => { ShowBalancingSpeed = (bool)e.Value; StateHasChanged(); })" id="chkBalancingSpeed" />
+                        <label class="form-check-label" for="chkBalancingSpeed">Balancing Speed</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowLeftBlade" @onchange="@(e => { ShowLeftBlade = (bool)e.Value; StateHasChanged(); })" id="chkLeftBlade" />
+                        <label class="form-check-label" for="chkLeftBlade">Left Blade</label>
+                    </div>
+                </div>
+
+                <!-- Grupo 4 -->
+                <div class="col-3">
+
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowLeftRadius" @onchange="@(e => { ShowLeftRadius = (bool)e.Value; StateHasChanged(); })" id="chkLeftRadius" />
+                        <label class="form-check-label" for="chkLeftRadius">Left Radius</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowLeftClip" @onchange="@(e => { ShowLeftClip = (bool)e.Value; StateHasChanged(); })" id="chkLeftClip" />
+                        <label class="form-check-label" for="chkLeftClip">Left Clip</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowRightBlade" @onchange="@(e => { ShowRightBlade = (bool)e.Value; StateHasChanged(); })" id="chkRightBlade" />
+                        <label class="form-check-label" for="chkRightBlade">Right Blade</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowRightRadius" @onchange="@(e => { ShowRightRadius = (bool)e.Value; StateHasChanged(); })" id="chkRightRadius" />
+                        <label class="form-check-label" for="chkRightRadius">Right Radius</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowRightClip" @onchange="@(e => { ShowRightClip = (bool)e.Value; StateHasChanged(); })" id="chkRightClip" />
+                        <label class="form-check-label" for="chkRightClip">Right Clip</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nuevo: Filtro de Final Status -->
+            <h5 class="mt-3">Final Status Filter</h5>
+            <div class="mb-2">
+                <button class="btn btn-sm btn-outline-primary me-2"
+                        @onclick="SelectAllStatus">
+                    Select All
+                </button>
+                <button class="btn btn-sm btn-outline-secondary"
+                        @onclick="DeselectAllStatus">
+                    Deselect All
+                </button>
+            </div>
+            <div class="row">
+                <div class="col-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowStatusPass"
+                               @onchange="async (e) => { ShowStatusPass = (bool)e.Value; await RefreshFilters(); }"
+                               id="chkStatusPass" />
+                        <label class="form-check-label" for="chkStatusPass">PASS</label>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowStatusFail"
+                               @onchange="async (e) => { ShowStatusFail = (bool)e.Value; await RefreshFilters(); }"
+                               id="chkStatusFail" />
+                        <label class="form-check-label" for="chkStatusFail">FAIL</label>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" checked="@ShowStatusReject"
+                               @onchange="async (e) => { ShowStatusReject = (bool)e.Value; await RefreshFilters(); }"
+                               id="chkStatusReject" />
+                        <label class="form-check-label" for="chkStatusReject">REJECT</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Fila 2: Tabla responsiva con paginador personalizado -->
+    <!-- Reemplaza la parte de la tabla actual con esta implementación de dos tablas -->
+    <div class="row">
+        <div class="col-12">
+            @if (AllRecords.Count > 0)
+            {
+                string balancer1 = "";
+                string balancer2 = "";
+
+                @if (SelectedCell == "A")
+                {
+                    balancer1 = "Balancer 15";
+                    balancer2 = "Balancer 16";
+                }
+                else if (SelectedCell == "B")
+                {
+                    balancer1 = "Balancer 13";
+                    balancer2 = "Balancer 14";
+                }
+                else if (SelectedCell == "C")
+                {
+                    balancer1 = "Balancer 11";
+                    balancer2 = "Balancer 12";
+                }
+
+                <h4 class="mt-4 mb-3">@balancer1</h4>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                @if (ShowTime)
+                                {
+                                    <th>Time</th>
+                                }
+                                @if (ShowUser)
+                                {
+                                    <th>User</th>
+                                }
+                                @if (ShowMotorCode)
+                                {
+                                    <th>Motor Code</th>
+                                }
+                                @if (ShowFinalStatus)
+                                {
+                                    <th>Final Status</th>
+                                }
+                                @if (ShowVoltage)
+                                {
+                                    <th>Voltage</th>
+                                }
+                                @if (ShowCurrent)
+                                {
+                                    <th>Current</th>
+                                }
+                                @if (ShowSpeed)
+                                {
+                                    <th>Speed</th>
+                                }
+                                @if (ShowStaticValue)
+                                {
+                                    <th>Static</th>
+                                }
+                                @if (ShowStaticAngle)
+                                {
+                                    <th>Static Angle</th>
+                                }
+                                @if (ShowCouple)
+                                {
+                                    <th>Couple</th>
+                                }
+                                @if (ShowCoupleAngle)
+                                {
+                                    <th>Couple Angle</th>
+                                }
+                                @if (ShowUnbalance)
+                                {
+                                    <th>Unbalance</th>
+                                }
+                                @if (ShowCycleTime)
+                                {
+                                    <th>Cycle Time</th>
+                                }
+                                @if (ShowPlane1)
+                                {
+                                    <th>Plane 1</th>
+                                }
+                                @if (ShowUnbalancePlane2)
+                                {
+                                    <th>Unbalance Plane 2</th>
+                                }
+                                @if (ShowPlane2)
+                                {
+                                    <th>Plane 2</th>
+                                }
+                                @if (ShowBalancingSpeed)
+                                {
+                                    <th>Balancing Speed</th>
+                                }
+                                @if (ShowLeftBlade)
+                                {
+                                    <th>Left Blade</th>
+                                }
+                                @if (ShowLeftRadius)
+                                {
+                                    <th>Left Radius</th>
+                                }
+                                @if (ShowLeftClip)
+                                {
+                                    <th>Left Clip</th>
+                                }
+                                @if (ShowRightBlade)
+                                {
+                                    <th>Right Blade</th>
+                                }
+                                @if (ShowRightRadius)
+                                {
+                                    <th>Right Radius</th>
+                                }
+                                @if (ShowRightClip)
+                                {
+                                    <th>Right Clip</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var records1 = PagedRecords.Where(r => r.Source == balancer1).ToList();
+                            }
+                            @if (records1.Count > 0)
+                            {
+                                @foreach (var record in records1)
+                                {
+                                    <tr>
+                                        @if (ShowTime)
+                                        {
+                                            <td>@record.Time</td>
+                                        }
+                                        @if (ShowUser)
+                                        {
+                                            <td>@record.User</td>
+                                        }
+                                        @if (ShowMotorCode)
+                                        {
+                                            <td>@record.MotorCode</td>
+                                        }
+                                        @if (ShowFinalStatus)
+                                        {
+                                            <td>@record.FinalStatus</td>
+                                        }
+                                        @if (ShowVoltage)
+                                        {
+                                            <td>@record.Voltage</td>
+                                        }
+                                        @if (ShowCurrent)
+                                        {
+                                            <td>@record.Current</td>
+                                        }
+                                        @if (ShowSpeed)
+                                        {
+                                            <td>@record.Speed</td>
+                                        }
+                                        @if (ShowStaticValue)
+                                        {
+                                            <td>@record.StaticValue</td>
+                                        }
+                                        @if (ShowStaticAngle)
+                                        {
+                                            <td>@record.StaticAngle</td>
+                                        }
+                                        @if (ShowCouple)
+                                        {
+                                            <td>@record.Couple</td>
+                                        }
+                                        @if (ShowCoupleAngle)
+                                        {
+                                            <td>@record.CoupleAngle</td>
+                                        }
+                                        @if (ShowUnbalance)
+                                        {
+                                            <td>@record.Unbalance</td>
+                                        }
+                                        @if (ShowCycleTime)
+                                        {
+                                            <td>@record.CycleTime</td>
+                                        }
+                                        @if (ShowPlane1)
+                                        {
+                                            <td>@record.Plane1</td>
+                                        }
+                                        @if (ShowUnbalancePlane2)
+                                        {
+                                            <td>@record.UnbalancePlane2</td>
+                                        }
+                                        @if (ShowPlane2)
+                                        {
+                                            <td>@record.Plane2</td>
+                                        }
+                                        @if (ShowBalancingSpeed)
+                                        {
+                                            <td>@record.BalancingSpeed</td>
+                                        }
+                                        @if (ShowLeftBlade)
+                                        {
+                                            <td>@record.LeftBlade</td>
+                                        }
+                                        @if (ShowLeftRadius)
+                                        {
+                                            <td>@record.LeftRadius</td>
+                                        }
+                                        @if (ShowLeftClip)
+                                        {
+                                            <td>@record.LeftClip</td>
+                                        }
+                                        @if (ShowRightBlade)
+                                        {
+                                            <td>@record.RightBlade</td>
+                                        }
+                                        @if (ShowRightRadius)
+                                        {
+                                            <td>@record.RightRadius</td>
+                                        }
+                                        @if (ShowRightClip)
+                                        {
+                                            <td>@record.RightClip</td>
+                                        }
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="25" class="text-center">No records found for @balancer1</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <h4 class="mt-5 mb-3">@balancer2</h4>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                @if (ShowTime)
+                                {
+                                    <th>Time</th>
+                                }
+                                @if (ShowUser)
+                                {
+                                    <th>User</th>
+                                }
+                                @if (ShowMotorCode)
+                                {
+                                    <th>Motor Code</th>
+                                }
+                                @if (ShowFinalStatus)
+                                {
+                                    <th>Final Status</th>
+                                }
+                                @if (ShowVoltage)
+                                {
+                                    <th>Voltage</th>
+                                }
+                                @if (ShowCurrent)
+                                {
+                                    <th>Current</th>
+                                }
+                                @if (ShowSpeed)
+                                {
+                                    <th>Speed</th>
+                                }
+                                @if (ShowStaticValue)
+                                {
+                                    <th>Static</th>
+                                }
+                                @if (ShowStaticAngle)
+                                {
+                                    <th>Static Angle</th>
+                                }
+                                @if (ShowCouple)
+                                {
+                                    <th>Couple</th>
+                                }
+                                @if (ShowCoupleAngle)
+                                {
+                                    <th>Couple Angle</th>
+                                }
+                                @if (ShowUnbalance)
+                                {
+                                    <th>Unbalance</th>
+                                }
+                                @if (ShowCycleTime)
+                                {
+                                    <th>Cycle Time</th>
+                                }
+                                @if (ShowPlane1)
+                                {
+                                    <th>Plane 1</th>
+                                }
+                                @if (ShowUnbalancePlane2)
+                                {
+                                    <th>Unbalance Plane 2</th>
+                                }
+                                @if (ShowPlane2)
+                                {
+                                    <th>Plane 2</th>
+                                }
+                                @if (ShowBalancingSpeed)
+                                {
+                                    <th>Balancing Speed</th>
+                                }
+                                @if (ShowLeftBlade)
+                                {
+                                    <th>Left Blade</th>
+                                }
+                                @if (ShowLeftRadius)
+                                {
+                                    <th>Left Radius</th>
+                                }
+                                @if (ShowLeftClip)
+                                {
+                                    <th>Left Clip</th>
+                                }
+                                @if (ShowRightBlade)
+                                {
+                                    <th>Right Blade</th>
+                                }
+                                @if (ShowRightRadius)
+                                {
+                                    <th>Right Radius</th>
+                                }
+                                @if (ShowRightClip)
+                                {
+                                    <th>Right Clip</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var records2 = PagedRecords.Where(r => r.Source == balancer2).ToList();
+                            }
+                            @if (records2.Count > 0)
+                            {
+                                @foreach (var record in records2)
+                                {
+                                    <tr>
+                                        @if (ShowTime)
+                                        {
+                                            <td>@record.Time</td>
+                                        }
+                                        @if (ShowUser)
+                                        {
+                                            <td>@record.User</td>
+                                        }
+                                        @if (ShowMotorCode)
+                                        {
+                                            <td>@record.MotorCode</td>
+                                        }
+                                        @if (ShowFinalStatus)
+                                        {
+                                            <td>@record.FinalStatus</td>
+                                        }
+                                        @if (ShowVoltage)
+                                        {
+                                            <td>@record.Voltage</td>
+                                        }
+                                        @if (ShowCurrent)
+                                        {
+                                            <td>@record.Current</td>
+                                        }
+                                        @if (ShowSpeed)
+                                        {
+                                            <td>@record.Speed</td>
+                                        }
+                                        @if (ShowStaticValue)
+                                        {
+                                            <td>@record.StaticValue</td>
+                                        }
+                                        @if (ShowStaticAngle)
+                                        {
+                                            <td>@record.StaticAngle</td>
+                                        }
+                                        @if (ShowCouple)
+                                        {
+                                            <td>@record.Couple</td>
+                                        }
+                                        @if (ShowCoupleAngle)
+                                        {
+                                            <td>@record.CoupleAngle</td>
+                                        }
+                                        @if (ShowUnbalance)
+                                        {
+                                            <td>@record.Unbalance</td>
+                                        }
+                                        @if (ShowCycleTime)
+                                        {
+                                            <td>@record.CycleTime</td>
+                                        }
+                                        @if (ShowPlane1)
+                                        {
+                                            <td>@record.Plane1</td>
+                                        }
+                                        @if (ShowUnbalancePlane2)
+                                        {
+                                            <td>@record.UnbalancePlane2</td>
+                                        }
+                                        @if (ShowPlane2)
+                                        {
+                                            <td>@record.Plane2</td>
+                                        }
+                                        @if (ShowBalancingSpeed)
+                                        {
+                                            <td>@record.BalancingSpeed</td>
+                                        }
+                                        @if (ShowLeftBlade)
+                                        {
+                                            <td>@record.LeftBlade</td>
+                                        }
+                                        @if (ShowLeftRadius)
+                                        {
+                                            <td>@record.LeftRadius</td>
+                                        }
+                                        @if (ShowLeftClip)
+                                        {
+                                            <td>@record.LeftClip</td>
+                                        }
+                                        @if (ShowRightBlade)
+                                        {
+                                            <td>@record.RightBlade</td>
+                                        }
+                                        @if (ShowRightRadius)
+                                        {
+                                            <td>@record.RightRadius</td>
+                                        }
+                                        @if (ShowRightClip)
+                                        {
+                                            <td>@record.RightClip</td>
+                                        }
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="25" class="text-center">No records found for @balancer2</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="alert alert-info">
+                    No records found. Please select a cell and apply filters.
+                </div>
+            }
+
+            <!-- Custom pagination controls -->
+            <div class="custom-pagination">
+                <div class="pagination-info">
+                    @if (AllRecords.Count > 0)
+                    {
+                        <span>Showing @(CurrentPage * PageSize + 1) to @Math.Min((CurrentPage + 1) * PageSize, AllRecords.Count) of @AllRecords.Count entries</span>
+                    }
+                    else
+                    {
+                        <span>No records found</span>
+                    }
+                </div>
+                <div class="pagination-controls">
+                    <button class="btn btn-sm @(CurrentPage == 0 ? "btn-secondary" : "btn-primary")"
+                            @onclick="FirstPage" disabled="@(CurrentPage == 0 || AllRecords.Count == 0)">
+                        First
+                    </button>
+                    <button class="btn btn-sm @(CurrentPage == 0 ? "btn-secondary" : "btn-primary")"
+                            @onclick="PreviousPage" disabled="@(CurrentPage == 0 || AllRecords.Count == 0)">
+                        Previous
+                    </button>
+
+                    @for (int i = Math.Max(0, CurrentPage - 2); i <= Math.Min(CurrentPage + 2, TotalPages - 1); i++)
+                    {
+                        int pageNumber = i;
+                        <button class="btn btn-sm @(CurrentPage == pageNumber ? "btn-primary" : "btn-outline-primary")"
+                                @onclick="() => GoToPage(pageNumber)">
+                            @(pageNumber + 1)
+                        </button>
+                    }
+
+                    <button class="btn btn-sm @(CurrentPage >= TotalPages - 1 ? "btn-secondary" : "btn-primary")"
+                            @onclick="NextPage" disabled="@(CurrentPage >= TotalPages - 1 || AllRecords.Count == 0)">
+                        Next
+                    </button>
+                    <button class="btn btn-sm @(CurrentPage >= TotalPages - 1 ? "btn-secondary" : "btn-primary")"
+                            @onclick="LastPage" disabled="@(CurrentPage >= TotalPages - 1 || AllRecords.Count == 0)">
+                        Last
+                    </button>
+                </div>
+                <div class="pagination-size">
+                    <label>
+                        Show
+                        <select @onchange="OnPageSizeChanged" class="form-select form-select-sm">
+                            <option value="5" selected="@(PageSize == 5)">5</option>
+                            <option value="10" selected="@(PageSize == 10)">10</option>
+                            <option value="25" selected="@(PageSize == 25)">25</option>
+                            <option value="50" selected="@(PageSize == 50)">50</option>
+                            <option value="100" selected="@(PageSize == 100)">100</option>
+                        </select>
+                        entries
+                    </label>
+                </div>
+            </div>
+            @* ——— Después del paginador ——— *@
+@* ——— Después del paginador ——— *@
+@* ——— Después del paginador ——— *@
+@* ——— Después del paginador ——— *@@* ——— Sólo cuando el filtro sea “Time” y haya resultados ——— *@
+            @if (SelectedFilterType == "Motor" && AllRecords != null
+            && AllRecords.Any()
+            && LastModelResults != null
+            && LastModelResults.Any())
+            {
+    
+        var fanResults = LastModelResults.Where(r => r.Source == "FanMotor").ToList();
+        var asmResults = LastModelResults.Where(r => r.Source == "FinalAssembly").ToList();
+    
+
+    <h4 class="mt-5">Torque Fan Motor</h4>
+    //@if (fanResults.Any())
+    //{
+        <div class="table-responsive">
+            <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>TorqueTimestamp</th>
+                                    <th>MotorFan</th>
+                                    <th>AngleMin</th>
+                                    <th>AngleValue</th>
+                                    <th>AngleMax</th>
+                                     <th>AngleTarget</th>
+                                    <th>TorqueMin</th>
+                                    <th>TorqueValue</th>
+                                    <th>TorqueMax</th>
+                                    <th>TorqueTarget</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in fanResults)
+                                {
+                                    <tr>
+                                        <td>@f.TorqueTimestamp</td>
+                                        <td>@f.MotorFan</td>
+                                        <td>@f.AngleMin</td>
+                                        <td>@f.AngleValue</td>
+                                        <td>@f.AngleMax</td>
+                                        <td>@f.AngleTarget</td>
+                                        <td>@f.TorqueMin</td>
+                                        <td>@f.TorqueValue</td>
+                                        <td>@f.TorqueMax</td>
+                                        <td>@f.TorqueTarget</td>
+                                    </tr>
+                                }
+                            </tbody>
+
+            </table>
+        </div>
+    //}
+    //else
+    //{
+        <div class="alert alert-secondary">No hay datos en FanMotor.</div>
+    //}
+
+    <h4 class="mt-5">Torque Final Assembly</h4>
+    @if (asmResults.Any())
+    {
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                                <tr>
+                                    <th>TorqueTimestamp</th>
+                                    <th>MotorFan</th>
+                                    <th>AngleMin</th>
+                                    <th>AngleValue</th>
+                                    <th>AngleMax</th>
+                                     <th>AngleTarget</th>
+                                    <th>TorqueMin</th>
+                                    <th>TorqueValue</th>
+                                    <th>TorqueMax</th>
+                                    <th>TorqueTarget</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in asmResults)
+                                {
+                                    <tr>
+                                        <td>@a.TorqueTimestamp</td>
+                                        <td>@a.MotorFan</td>
+                                        <td>@a.AngleMin</td>
+                                        <td>@a.AngleValue</td>
+                                        <td>@a.AngleMax</td>
+                                        <td>@a.AngleTarget</td>
+                                        <td>@a.TorqueMin</td>
+                                        <td>@a.TorqueValue</td>
+                                        <td>@a.TorqueMax</td>
+                                        <td>@a.TorqueTarget</td>
+                                    </tr>
+                                }
+                            </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <div class="alert alert-secondary">No hay datos en FinalAssembly.</div>
+    }
+}
+
+
+
+
+
+
+        </div>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="modal-backdrop show"></div>
+        <div class="loading-modal">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div class="mt-2">Loading data...</div>
+        </div>
+    }
+</div>
+<style>
+
+    /* Estilos para el modal de carga */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 1050;
+    }
+
+    .loading-modal {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1060;
+        background-color: white;
+        border-radius: 8px;
+        padding: 30px;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+
+    .container-column {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        width: 90%;
+        margin: 0 auto;
+        padding: 20px 0;
+    }
+
+    .row-panels {
+        display: flex;
+        flex-direction: row;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    .row-table {
+        background-color: transparent;
+    }
+
+    .panel {
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+    }
+    /* Panel izquierdo sin fondo */
+    .panel-left.no-bg {
+        background-color: transparent;
+        flex: 1;
+    }
+    /* Panel derecho con fondo blanco */
+    .panel-right {
+        background-color: #ffffff;
+        width: 300px;
+    }
+
+    .header-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .title-incident {
+        font-size: 24px;
+        text-transform: uppercase;
+        margin: 0;
+    }
+
+    .filter-select {
+        padding: 10px;
+        font-size: 16px;
+        width: 300px;
+        border-radius: 5px;
+        margin-top: 10px;
+    }
+
+    .search-box {
+        padding: 10px;
+        font-size: 16px;
+        width: 300px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        text-align: center;
+    }
+
+    .radio-group {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .radio-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .checkbox-list {
+        display: flex;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 2.5px;
+    }
+
+    /* Updated styles for responsiveness */
+    .table-responsive {
+        display: block;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table {
+        width: 100%;
+        min-width: 800px; /* Adjust according to your columns */
+        white-space: nowrap;
+        border-collapse: collapse;
+        background-color: #ffffff;
+        margin-bottom: 20px;
+    }
+
+        .table thead {
+            background-color: #dddddd;
+        }
+
+        .table th {
+            border: 1px solid #999999;
+            padding: 10px;
+            text-align: left;
+            color: white;
+            background: orange;
+        }
+
+        .table td {
+            border: 1px solid #999999;
+            padding: 10px;
+            text-align: left;
+            color: black;
+        }
+
+
+    /* Elimina el color blanco global y deja que cada variante defina su color */
+    .btn {
+        display: inline-block;
+        padding: 6px 12px;
+        margin: 0 4px;
+        border: none;
+        border-radius: 4px;
+        text-decoration: none;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s ease;
+        color: inherit; /* ya no forzamos #fff */
+        background-color: transparent;
+    }
+
+    /* Botones primarios/secundarios */
+    .btn-primary {
+        background-color: #007bff;
+        color: #fff;
+    }
+
+    .btn-secondary {
+        background-color: #6c757d;
+        color: #fff;
+    }
+
+    /* Outline buttons para paginación y demás */
+    .btn-outline-primary {
+        background-color: transparent;
+        border: 1px solid #007bff;
+        color: #007bff;
+    }
+
+    .btn-outline-secondary {
+        background-color: transparent;
+        border: 1px solid #6c757d;
+        color: #6c757d;
+    }
+
+    /* Hover para outline */
+    .btn-outline-primary:hover {
+        background-color: #007bff;
+        color: #fff;
+    }
+
+    .btn-outline-secondary:hover {
+        background-color: #6c757d;
+        color: #fff;
+    }
+
+    /* Botones "Select All" / "Deselect All" */
+    .btn-select {
+        border: 1px solid green;
+        color: green;
+        background-color: transparent;
+    }
+
+        .btn-select:hover {
+            background-color: green;
+            color: #fff;
+        }
+
+    .btn-deselect {
+        border: 1px solid red;
+        color: red;
+        background-color: transparent;
+    }
+
+        .btn-deselect:hover {
+            background-color: red;
+            color: #fff;
+        }
+
+    /* Paginación: que todas las páginas sean visibles */
+    .pagination-controls .btn {
+        border: 1px solid #007bff;
+        color: #007bff;
+        background-color: transparent;
+    }
+
+        .pagination-controls .btn:hover {
+            background-color: #007bff;
+            color: #fff;
+        }
+        /* Mantén el estado "active" (btn-primary) ya definido */
+        .pagination-controls .btn.btn-primary {
+            background-color: #007bff;
+            color: #fff;
+            border-color: #007bff;
+        }
+
+    .source-label {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    /* Custom pagination styles */
+    .custom-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .pagination-info {
+        color: #666;
+    }
+
+    .pagination-controls {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+
+    .pagination-size {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+        .pagination-size select {
+            width: 60px;
+            display: inline-block;
+        }
+</style>
+@code {
+    // Custom pagination properties
+    private List<CommonResult> AllRecords { get; set; } = new();
+    private List<CommonResult> PagedRecords => AllRecords
+        .Skip(CurrentPage * PageSize)
+        .Take(PageSize)
+        .ToList();
+    private int PageSize { get; set; } = 10;
+    private int CurrentPage { get; set; } = 0;
+    private int TotalPages => (int)Math.Ceiling(AllRecords.Count / (double)PageSize);
+    private List<CommonResult> LastModelResults = new();
+
+    // Selección de celda (A, B o C)
+    // Campo privado de respaldo
+    private string _selectedCell = "";
+
+    /// <summary>
+    /// Obtiene los últimos 3 registros de TorquesBrasilFanMotor o TorquesBrasilFinalAssembly
+    /// según el tipo de filtro ("Time" o "Motor") y el valor de filtro proporcionado.
+    /// </summary>
+    // --------------------------------------------------
+    // 2) GetLastThreeModelRecordsAsync sin null-propagation
+    // --------------------------------------------------
+   private async Task<List<CommonResult>> GetLastThreeModelRecordsAsync()
+{
+    var fanQuery = context.FanMotor.AsQueryable();
+    var asmQuery = context.FinalAssembly.AsQueryable();
+
+    if (SelectedFilterType == "Motor" && !string.IsNullOrEmpty(FilterValue))
+    {
+        // Coincidencia exacta: VIN debe ser igual al motor code
+        fanQuery = fanQuery.Where(f => f.VIN != null && f.VIN == FilterValue);
+            asmQuery = asmQuery.Where(a => a.VIN != null && a.VIN == FilterValue);
+
+    }
+
+    var fanEntities = await fanQuery
+        .OrderByDescending(f => f.TorqueValue_TIMESTAMP)
+        .Take(3)
+        .ToListAsync();
+
+    var asmEntities = await asmQuery
+        .OrderByDescending(a => a.TorqueValue_TIMESTAMP)
+        .Take(3)
+        .ToListAsync();
+
+    var fanResults = fanEntities.Select(f => new CommonResult
+        {
+                Source = "FanMotor",
+                TorqueTimestamp = f.TorqueValue_TIMESTAMP,
+                MotorFan = f.VIN,
+
+                AngleMin = f.AngleMin,
+                AngleValue = f.AngleValue,
+                AngleMax = f.AngleMax,
+
+                TorqueMin = f.TorqueMin,
+                TorqueValue = f.TorqueValue.HasValue ? (decimal?)f.TorqueValue.Value : null,
+                TorqueMax = f.TorqueMax,
+                TorqueTarget = f.TorqueTarget,
+
+                AngleTarget = f.AngleTarget
+
+        });
+
+    var asmResults = asmEntities.Select(a => new CommonResult
+        {
+            Source = "FinalAssembly",
+                TorqueTimestamp = a.TorqueValue_TIMESTAMP,
+                MotorFan = a.VIN,
+
+                AngleMin = a.AngleMin,
+                AngleValue = a.AngleValue,
+                AngleMax = a.AngleMax,
+
+                TorqueMin = a.TorqueMin,
+                TorqueValue = a.TorqueValue.HasValue ? (decimal?)a.TorqueValue.Value : null,
+                TorqueMax = a.TorqueMax,
+                TorqueTarget = a.TorqueTarget,
+
+                AngleTarget = a.AngleTarget
+        });
+
+    return fanResults.Concat(asmResults).OrderByDescending(r => r.TorqueTimestamp).ToList();
+}
+
+
+    // Propiedad pública que dispara la búsqueda automática al cambiar
+    public string SelectedCell
+    {
+        get => _selectedCell;
+        set
+        {
+            if (_selectedCell == value) return;
+            _selectedCell = value;
+
+            // Cuando cambia la celda, si ya hay filtro y valor completo, auto‐aplicar
+            InvokeAsync(async () =>
+            {
+                if (string.IsNullOrEmpty(SelectedFilterType) ||
+                    string.IsNullOrEmpty(_selectedCell))
+                    return;
+
+                IsLoading = true;
+                StateHasChanged();
+
+                // Permitimos que el spinner se pinte
+                await Task.Yield();
+
+                if (SelectedFilterType == "Interval")
+                    await TryAutoApplyInterval();
+                else
+                    await TryAutoApplyFilter();
+
+                IsLoading = false;
+                StateHasChanged();
+            });
+        }
+    }
+
+    // Tipo de filtro
+    private string _selectedFilterType = "";
+    private string SelectedFilterType
+    {
+        get => _selectedFilterType;
+        set
+        {
+            if (_selectedFilterType != value)
+            {
+                // Guardar el valor anterior para verificación
+                string oldValue = _selectedFilterType;
+
+                // Actualizar el valor inmediatamente
+                _selectedFilterType = value;
+
+                // Mostrar el indicador de carga
+                IsLoading = true;
+
+                // Ejecutar el cambio de tipo de filtro asincrónicamente
+                InvokeAsync(async () =>
+                {
+                    // Pequeño retraso para que la UI tenga tiempo de actualizar el indicador de carga
+                    await Task.Delay(10);
+
+                    // Verificar que el filtro no haya cambiado mientras esperábamos
+                    if (_selectedFilterType == value && oldValue != value)
+                    {
+                        try
+                        {
+                            // Realizar las operaciones necesarias al cambiar el filtro
+                            OnFilterTypeChanged();
+                        }
+                        finally
+                        {
+                            // Ocultar el indicador de carga
+                            IsLoading = false;
+                            StateHasChanged();
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // Valores para poblar el segundo combobox
+    private List<string> FilterValuesList { get; set; } = new();
+
+    // Inputs del filtro
+    private string FilterValue { get; set; } = string.Empty;
+    private string IntervalStart { get; set; } = string.Empty;
+    private string IntervalEnd { get; set; } = string.Empty;
+    // Variables para mensajes de error de validación
+    private string FilterValueError { get; set; } = string.Empty;
+    private string IntervalStartError { get; set; } = string.Empty;
+    private string IntervalEndError { get; set; } = string.Empty;
+
+    // Columnas por defecto (activas)
+    private bool ShowTime { get; set; } = true;
+    private bool ShowUser { get; set; } = true;
+    private bool ShowMotorCode { get; set; } = true;
+    private bool ShowFinalStatus { get; set; } = true;
+    private bool ShowVoltage { get; set; } = true;
+    private bool ShowCurrent { get; set; } = true;
+    private bool ShowSpeed { get; set; } = true;
+    private bool ShowStaticValue { get; set; } = true; // Renamed from ShowStatic to avoid conflict
+    private bool ShowStaticAngle { get; set; } = true;
+    private bool ShowCouple { get; set; } = true;
+    private bool ShowCoupleAngle { get; set; } = true;
+    private bool ShowUnbalance { get; set; } = true;
+    private bool ShowCycleTime { get; set; } = true;
+
+    // Columnas adicionales (inactivas)
+    private bool ShowPlane1 { get; set; } = false;
+    private bool ShowUnbalancePlane2 { get; set; } = false;
+    private bool ShowPlane2 { get; set; } = false;
+    private bool ShowBalancingSpeed { get; set; } = false;
+    private bool ShowLeftBlade { get; set; } = false;
+    private bool ShowLeftRadius { get; set; } = false;
+    private bool ShowLeftClip { get; set; } = false;
+    private bool ShowRightBlade { get; set; } = false;
+    private bool ShowRightRadius { get; set; } = false;
+    private bool ShowRightClip { get; set; } = false;
+
+    // Filtros de Final Status (nuevos)
+    private bool ShowStatusPass { get; set; } = true;
+    private bool ShowStatusFail { get; set; } = true;
+    private bool ShowStatusReject { get; set; } = true;
+
+    private bool IsLoading { get; set; } = false;
+
+    // Clase común para resultados
+    // --------------------------------------------------
+    // 1) CommonResult con todas las columnas nuevas
+    // --------------------------------------------------
+    public class CommonResult
+    {
+        public string Source { get; set; }
+
+        // Campos generales
+        public string Time { get; set; }
+        public string User { get; set; }
+        public string MotorCode { get; set; }
+        public string FinalStatus { get; set; }
+
+        public DateTime? TorqueTimestamp { get; set; }
+        public string MotorFan { get; set; }
+        public int? AngleMin { get; set; }
+        public int? TorqueAngle { get; set; }
+        public int? AngleValue { get; set; }
+        public int? AngleMax { get; set; }
+        public float? TorqueMin { get; set; }
+        public decimal? TorqueValue { get; set; }
+        public float? TorqueMax { get; set; }
+        public float? TorqueTarget { get; set; }
+        public int? AngleTarget { get; set; }
+
+
+
+        // Columnas de balancers
+        public decimal? Voltage { get; set; }
+        public decimal? Current { get; set; }
+        public decimal? Speed { get; set; }
+        public decimal? CycleTime { get; set; }
+        public decimal? LeftBlade { get; set; }
+        public decimal? LeftRadius { get; set; }
+        public decimal? LeftClip { get; set; }
+        public decimal? RightBlade { get; set; }
+        public decimal? RightRadius { get; set; }
+        public decimal? RightClip { get; set; }
+
+        public string StaticValue { get; set; }
+        public string StaticAngle { get; set; }
+        public string Couple { get; set; }
+        public string CoupleAngle { get; set; }
+        public string Unbalance { get; set; }
+        public string Plane1 { get; set; }
+        public string UnbalancePlane2 { get; set; }
+        public string Plane2 { get; set; }
+        public string BalancingSpeed { get; set; }
+
+    }
+
+
+    private Task HandleKeyDownIntervalStart(KeyboardEventArgs e)
+    {
+        return HandleKeyDownInterval(e, "intervalStart");
+    }
+
+    private Task HandleKeyDownIntervalEnd(KeyboardEventArgs e)
+    {
+        return HandleKeyDownInterval(e, "intervalEnd");
+    }
+
+    private ConexionesBral context = default!;
+
+    protected override void OnInitialized()
+    {
+        context = DbFactory.CreateDbContext();
+
+        SelectedCell = ""; // Default to cell A
+        PageSize = 10; // Default page size
+        UpdateFilterValuesList();
+    }
+
+    // Método para refrescar los filtros y limpiar caché
+    private async Task RefreshFilters()
+    {
+        // Limpiar la caché de resultados
+        AllRecords.Clear();
+        CurrentPage = 0;
+
+        // Aplicar filtros inmediatamente
+        await ApplyFilters();
+
+        // Llamar al JavaScript para forzar la actualización del DOM
+        if (JSRuntime != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("eval", "void(0);");
+            }
+            catch { }
+        }
+    }
+
+    /// <summary>
+    /// Method to load records based on current filter criteria
+    /// </summary>
+    private async Task ApplyFilters()
+{
+    try
+    {
+        IsLoading = true;
+        StateHasChanged();
+
+        await Task.Delay(1);
+
+        var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var cancellationToken = cancellationTokenSource.Token;
+
+        await Task.Run(async () =>
+        {
+            try
+            {
+                AllRecords = GetFilteredRecords().ToList();
+
+                if (AllRecords.Count > 1000)
+                {
+                    AllRecords = AllRecords.Take(1000).ToList();
+                }
+
+                CurrentPage = 0;
+            }
+            catch (OperationCanceledException)
+            {
+                AllRecords = GetFilteredRecords().Take(200).ToList();
+            }
+        }, cancellationToken);
+
+        // IMPORTANTE: Actualizar también los datos de Fan Motor cuando cambie el filtro
+        LastModelResults = await GetLastThreeModelRecordsAsync();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error al aplicar filtros: {ex.Message}");
+        AllRecords = new List<CommonResult>();
+        LastModelResults = new List<CommonResult>();
+    }
+    finally
+    {
+        IsLoading = false;
+        StateHasChanged();
+    }
+}
+
+    // Manejo de eventos keydown para el filtro principal
+    private Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Si no es una tecla de navegación o control y ya alcanzamos la longitud máxima
+        if (FilterValue?.Length >= GetFilterMaxLength() &&
+            !e.Key.StartsWith("Arrow") &&
+            e.Key != "Backspace" &&
+            e.Key != "Delete" &&
+            e.Key != "Tab" &&
+            !e.CtrlKey)
+        {
+            // Para teclas que no son de control, limita la entrada
+            if (e.Key.Length == 1) // Probablemente un carácter imprimible
+            {
+                // Actualiza el valor para asegurar que no exceda el límite
+                FilterValue = FilterValue.Substring(0, GetFilterMaxLength());
+                StateHasChanged();
+            }
+        }
+        return Task.CompletedTask;
+    }
+
+    // Manejo de eventos keydown para campos de intervalo
+    private Task HandleKeyDownInterval(KeyboardEventArgs e, string fieldName)
+    {
+        string currentValue = fieldName == "intervalStart" ? IntervalStart : IntervalEnd;
+
+        // Si no es una tecla de navegación o control y ya alcanzamos la longitud máxima
+        if (currentValue?.Length >= 14 &&
+            !e.Key.StartsWith("Arrow") &&
+            e.Key != "Backspace" &&
+            e.Key != "Delete" &&
+            e.Key != "Tab" &&
+            !e.CtrlKey)
+        {
+            // Para teclas que no son de control, limita la entrada
+            if (e.Key.Length == 1) // Probablemente un carácter imprimible
+            {
+                // Actualiza el valor para asegurar que no exceda el límite
+                if (fieldName == "intervalStart")
+                    IntervalStart = IntervalStart.Substring(0, 14);
+                else
+                    IntervalEnd = IntervalEnd.Substring(0, 14);
+
+                StateHasChanged();
+            }
+        }
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Get filtered records based on current criteria
+    /// </summary>
+    // Reemplaza el método GetFilteredRecords() con esta versión modificada:
+
+    private IQueryable<CommonResult> GetFilteredRecords()
+    {
+        // validaciones iniciales
+        if (string.IsNullOrEmpty(SelectedCell)
+            || (SelectedFilterType != "Interval" && string.IsNullOrEmpty(FilterValue))
+            || (SelectedFilterType == "Interval" && (string.IsNullOrEmpty(IntervalStart) || string.IsNullOrEmpty(IntervalEnd))))
+        {
+            return Enumerable.Empty<CommonResult>().AsQueryable();
+        }
+
+        // Si todos los estados están desactivados, retornar vacío
+        if (!ShowStatusPass && !ShowStatusFail && !ShowStatusReject)
+        {
+            return Enumerable.Empty<CommonResult>().AsQueryable();
+        }
+
+        // Calcular intervalo de +-15 segundos para filtro Time
+        string timeStart = FilterValue;
+        string timeEnd = FilterValue;
+
+        if (SelectedFilterType == "Time" && FilterValue.Length == 14)
+        {
+            // Convertir el string a DateTime para hacer cálculos
+            if (DateTime.TryParseExact(FilterValue, "yyyyMMddHHmmss", null,
+                System.Globalization.DateTimeStyles.None, out DateTime baseTime))
+            {
+                // Restar 15 segundos
+                DateTime startTime = baseTime.AddSeconds(-15);
+                timeStart = startTime.ToString("yyyyMMddHHmmss");
+
+                // Sumar 15 segundos
+                DateTime endTime = baseTime.AddSeconds(15);
+                timeEnd = endTime.ToString("yyyyMMddHHmmss");
+            }
+        }
+
+        // ================= CELL A =================
+        if (SelectedCell == "A")
+        {
+            var q1 = from r in context.Bal17
+                     where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                            && string.Compare(r.Time, timeStart) >= 0
+                            && string.Compare(r.Time, timeEnd) <= 0)
+                        || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                             (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                        || (SelectedFilterType == "Interval"
+                             && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                             && string.Compare(r.Time, IntervalStart) >= 0
+                             && string.Compare(r.Time, IntervalEnd) <= 0)
+                     select new CommonResult
+                         {
+                             Time = r.Time,
+                             User = r.User,
+                             MotorCode = r.MotorCode,
+                             FinalStatus = r.FinalStatus,
+                             Voltage = r.Voltage,
+                             Current = r.Current,
+                             Speed = r.Speed,
+                             CycleTime = r.CycleTime,
+                             LeftBlade = r.LeftBlade,
+                             LeftRadius = r.LeftRadius,
+                             LeftClip = r.LeftClip,
+                             RightBlade = r.RightBlade,
+                             RightRadius = r.RightRadius,
+                             RightClip = r.RightClip,
+                             StaticValue = r.Static,
+                             StaticAngle = r.StaticAngle,
+                             Couple = r.Couple,
+                             CoupleAngle = r.CoupleAngle,
+                             Unbalance = r.Unbalance,
+                             Plane1 = r.Plane1,
+                             UnbalancePlane2 = r.UnbalancePlane2,
+                             Plane2 = r.Plane2,
+                             BalancingSpeed = r.BalancingSpeed,
+                             Source = "Balancer 15"
+                         };
+
+            var q2 = from r in context.Bal18
+                     where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                            && string.Compare(r.Time, timeStart) >= 0
+                            && string.Compare(r.Time, timeEnd) <= 0)
+                        || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                             (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                        || (SelectedFilterType == "Interval"
+                             && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                             && string.Compare(r.Time, IntervalStart) >= 0
+                             && string.Compare(r.Time, IntervalEnd) <= 0)
+                     select new CommonResult
+                         {
+                             Time = r.Time,
+                             User = r.User,
+                             MotorCode = r.MotorCode,
+                             FinalStatus = r.FinalStatus,
+                             Voltage = r.Voltage,
+                             Current = r.Current,
+                             Speed = r.Speed,
+                             CycleTime = r.CycleTime,
+                             LeftBlade = r.LeftBlade,
+                             LeftRadius = r.LeftRadius,
+                             LeftClip = r.LeftClip,
+                             RightBlade = r.RightBlade,
+                             RightRadius = r.RightRadius,
+                             RightClip = r.RightClip,
+                             StaticValue = r.Static,
+                             StaticAngle = r.StaticAngle,
+                             Couple = r.Couple,
+                             CoupleAngle = r.CoupleAngle,
+                             Unbalance = r.Unbalance,
+                             Plane1 = r.Plane1,
+                             UnbalancePlane2 = r.UnbalancePlane2,
+                             Plane2 = r.Plane2,
+                             BalancingSpeed = r.BalancingSpeed,
+                             Source = "Balancer 16"
+                         };
+
+            // Unir resultados y aplicar filtro de estado como paso final
+            var results = q1.Union(q2);
+
+            // Aplicar filtro de estado
+            results = results.Where(r =>
+                (ShowStatusPass && r.FinalStatus == "PASS") ||
+                (ShowStatusFail && r.FinalStatus == "FAIL") ||
+                (ShowStatusReject && r.FinalStatus == "REJECT") ||
+                (r.FinalStatus != "PASS" && r.FinalStatus != "FAIL" && r.FinalStatus != "REJECT"));
+
+            return results.OrderByDescending(x => x.Time).Take(500); // Limitar a 500 para mejorar rendimiento
+        }
+
+        // ================= CELL B =================
+        if (SelectedCell == "B")
+        {
+            var q111 = from r in context.Bal15
+                       where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                            && string.Compare(r.Time, timeStart) >= 0
+                            && string.Compare(r.Time, timeEnd) <= 0)
+                        || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                        || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                             (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                        || (SelectedFilterType == "Interval"
+                             && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                             && string.Compare(r.Time, IntervalStart) >= 0
+                             && string.Compare(r.Time, IntervalEnd) <= 0)
+                     select new CommonResult
+                         {
+                             Time = r.Time,
+                             User = r.User,
+                             MotorCode = r.MotorCode,
+                             FinalStatus = r.FinalStatus,
+                             Voltage = r.Voltage,
+                             Current = r.Current,
+                             Speed = r.Speed,
+                             CycleTime = r.CycleTime,
+                             LeftBlade = r.LeftBlade,
+                             LeftRadius = r.LeftRadius,
+                             LeftClip = r.LeftClip,
+                             RightBlade = r.RightBlade,
+                             RightRadius = r.RightRadius,
+                             RightClip = r.RightClip,
+                             StaticValue = r.Static,
+                             StaticAngle = r.StaticAngle,
+                             Couple = r.Couple,
+                             CoupleAngle = r.CoupleAngle,
+                             Unbalance = r.Unbalance,
+                             Plane1 = r.Plane1,
+                             UnbalancePlane2 = r.UnbalancePlane2,
+                             Plane2 = r.Plane2,
+                             BalancingSpeed = r.BalancingSpeed,
+                             Source = "Balancer 13"
+                         };
+
+            var q222 = from r in context.Bal16
+                       where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                              && string.Compare(r.Time, timeStart) >= 0
+                              && string.Compare(r.Time, timeEnd) <= 0)
+                          || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                          || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                          || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                               (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                          || (SelectedFilterType == "Interval"
+                               && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                               && string.Compare(r.Time, IntervalStart) >= 0
+                               && string.Compare(r.Time, IntervalEnd) <= 0)
+                     select new CommonResult
+                         {
+                             Time = r.Time,
+                             User = r.User,
+                             MotorCode = r.MotorCode,
+                             FinalStatus = r.FinalStatus,
+                             Voltage = r.Voltage,
+                             Current = r.Current,
+                             Speed = r.Speed,
+                             CycleTime = r.CycleTime,
+                             LeftBlade = r.LeftBlade,
+                             LeftRadius = r.LeftRadius,
+                             LeftClip = r.LeftClip,
+                             RightBlade = r.RightBlade,
+                             RightRadius = r.RightRadius,
+                             RightClip = r.RightClip,
+                             StaticValue = r.Static,
+                             StaticAngle = r.StaticAngle,
+                             Couple = r.Couple,
+                             CoupleAngle = r.CoupleAngle,
+                             Unbalance = r.Unbalance,
+                             Plane1 = r.Plane1,
+                             UnbalancePlane2 = r.UnbalancePlane2,
+                             Plane2 = r.Plane2,
+                             BalancingSpeed = r.BalancingSpeed,
+                             Source = "Balancer 14"
+                         };
+
+            // Unir resultados y aplicar filtro de estado
+            var results = q111.Union(q222);
+
+            // Aplicar filtro de estado
+            results = results.Where(r =>
+                (ShowStatusPass && r.FinalStatus == "PASS") ||
+                (ShowStatusFail && r.FinalStatus == "FAIL") ||
+                (ShowStatusReject && r.FinalStatus == "REJECT") ||
+                (r.FinalStatus != "PASS" && r.FinalStatus != "FAIL" && r.FinalStatus != "REJECT"));
+
+            return results.OrderByDescending(x => x.Time).Take(500);
+        }
+
+        // ================= CELL C =================
+        var q11 = from r in context.Bal11
+                  where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                         && string.Compare(r.Time, timeStart) >= 0
+                         && string.Compare(r.Time, timeEnd) <= 0)
+                     || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                     || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                     || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                          (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                     || (SelectedFilterType == "Interval"
+                          && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                          && string.Compare(r.Time, IntervalStart) >= 0
+                          && string.Compare(r.Time, IntervalEnd) <= 0)
+                  select new CommonResult
+                      {
+                          Time = r.Time,
+                          User = r.User,
+                          MotorCode = r.MotorCode,
+                          FinalStatus = r.FinalStatus,
+                          Voltage = r.Voltage,
+                          Current = r.Current,
+                          Speed = r.Speed,
+                          CycleTime = r.CycleTime,
+                          LeftBlade = r.LeftBlade,
+                          LeftRadius = r.LeftRadius,
+                          LeftClip = r.LeftClip,
+                          RightBlade = r.RightBlade,
+                          RightRadius = r.RightRadius,
+                          RightClip = r.RightClip,
+                          StaticValue = r.Static,
+                          StaticAngle = r.StaticAngle,
+                          Couple = r.Couple,
+                          CoupleAngle = r.CoupleAngle,
+                          Unbalance = r.Unbalance,
+                          Plane1 = r.Plane1,
+                          UnbalancePlane2 = r.UnbalancePlane2,
+                          Plane2 = r.Plane2,
+                          BalancingSpeed = r.BalancingSpeed,
+                          Source = "Balancer 11"
+                      };
+
+        var q12 = from r in context.Bal12
+                  where (SelectedFilterType == "Time" && FilterValue.Length == 14
+                         && string.Compare(r.Time, timeStart) >= 0
+                         && string.Compare(r.Time, timeEnd) <= 0)
+                     || (SelectedFilterType == "Day" && FilterValue.Length == 8 && r.Time.StartsWith(FilterValue))
+                     || (SelectedFilterType == "Month" && FilterValue.Length == 6 && r.Time.StartsWith(FilterValue))
+                     || (SelectedFilterType == "Motor" && r.MotorCode != null &&
+                          (r.MotorCode.Length >= 13 ? r.MotorCode.Substring(0, 13) : r.MotorCode).Contains(FilterValue))
+                     || (SelectedFilterType == "Interval"
+                          && IntervalStart.Length == 14 && IntervalEnd.Length == 14
+                          && string.Compare(r.Time, IntervalStart) >= 0
+                          && string.Compare(r.Time, IntervalEnd) <= 0)
+                  select new CommonResult
+                      {
+                          Time = r.Time,
+                          User = r.User,
+                          MotorCode = r.MotorCode,
+                          FinalStatus = r.FinalStatus,
+                          Voltage = r.Voltage,
+                          Current = r.Current,
+                          Speed = r.Speed,
+                          CycleTime = r.CycleTime,
+                          LeftBlade = r.LeftBlade,
+                          LeftRadius = r.LeftRadius,
+                          LeftClip = r.LeftClip,
+                          RightBlade = r.RightBlade,
+                          RightRadius = r.RightRadius,
+                          RightClip = r.RightClip,
+                          StaticValue = r.Static,
+                          StaticAngle = r.StaticAngle,
+                          Couple = r.Couple,
+                          CoupleAngle = r.CoupleAngle,
+                          Unbalance = r.Unbalance,
+                          Plane1 = r.Plane1,
+                          UnbalancePlane2 = r.UnbalancePlane2,
+                          Plane2 = r.Plane2,
+                          BalancingSpeed = r.BalancingSpeed,
+                          Source = "Balancer 12"
+                      };
+
+        // Unir resultados y aplicar filtro de estado
+        var resultsC = q11.Union(q12);
+
+        // Aplicar filtro de estado
+        resultsC = resultsC.Where(r =>
+            (ShowStatusPass && r.FinalStatus == "PASS") ||
+            (ShowStatusFail && r.FinalStatus == "FAIL") ||
+            (ShowStatusReject && r.FinalStatus == "REJECT") ||
+            (r.FinalStatus != "PASS" && r.FinalStatus != "FAIL" && r.FinalStatus != "REJECT"));
+
+        return resultsC.OrderByDescending(x => x.Time).Take(500);
+    }
+
+    // Método para obtener el placeholder según el tipo de filtro
+    private string GetFilterPlaceholder()
+    {
+        return SelectedFilterType switch
+        {
+            "Time" => "Enter 14 digit time",
+            "Day" => "Enter 8 digit day (YYYYMMDD)",
+            "Month" => "Enter 6 digit month (YYYYMM)",
+            "Motor" => "Enter 13 digit motor code",
+            _ => "Enter value"
+        };
+    }
+
+    // Método para obtener la longitud máxima según el tipo de filtro
+    private int GetFilterMaxLength()
+    {
+        return SelectedFilterType switch
+        {
+            "Time" => 14,
+            "Day" => 8,
+            "Month" => 6,
+            "Motor" => 13,
+            _ => 20
+        };
+    }
+
+    // Manejar entrada del filtro principal con autocompletado y búsqueda automática
+    /// <summary>
+    /// Se dispara en cuanto cambias el texto del filtro principal.
+    private void ValidateFilterInput(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        FilterValueError = string.Empty;
+
+        switch (SelectedFilterType)
+        {
+            case "Time":
+                if (!string.IsNullOrEmpty(value) && !value.All(char.IsDigit))
+                    FilterValueError = "Time must contain only digits";
+                else if (value.Length > 0 && value.Length < 14)
+                    FilterValueError = "Time must be exactly 14 digits";
+                break;
+
+            case "Day":
+                if (!string.IsNullOrEmpty(value) && !value.All(char.IsDigit))
+                    FilterValueError = "Day must contain only digits";
+                else if (value.Length > 0 && value.Length < 8)
+                    FilterValueError = "Day must be exactly 8 digits (YYYYMMDD)";
+                break;
+
+            case "Month":
+                if (!string.IsNullOrEmpty(value) && !value.All(char.IsDigit))
+                    FilterValueError = "Month must contain only digits";
+                else if (value.Length > 0 && value.Length < 6)
+                    FilterValueError = "Month must be exactly 6 digits (YYYYMM)";
+                break;
+
+            case "Motor":
+                if (!string.IsNullOrEmpty(value) && !value.All(char.IsDigit))
+                    FilterValueError = "Motor code must contain only digits";
+                else if (value.Length > 0 && value.Length < 13)
+                    FilterValueError = "Motor code must be exactly 13 digits";
+                break;
+        }
+    }
+
+    // ——— Auto-aplicar filtro principal ———
+    private async Task OnFilterValueChanged(ChangeEventArgs e)
+    {
+        FilterValue = e.Value?.ToString() ?? string.Empty;
+        ValidateFilterInput(e);
+        await TryAutoApplyFilter();
+    }
+
+    private async Task TryAutoApplyFilter()
+{
+    if (!string.IsNullOrEmpty(SelectedCell)
+        && !string.IsNullOrEmpty(SelectedFilterType)
+        && string.IsNullOrEmpty(FilterValueError)
+        && FilterValue.Length == GetFilterMaxLength())
+    {
+        IsLoading = true;
+        StateHasChanged();
+        try
+        {
+            await Task.Delay(1);
+            AllRecords = GetFilteredRecords().ToList();
+            CurrentPage = 0;
+            
+            // NUEVO: También actualizar Fan Motor en auto-aplicación
+            LastModelResults = await GetLastThreeModelRecordsAsync();
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+}
+
+    // ——— Auto-aplicar intervalo ———
+    private async Task OnIntervalStartChanged(ChangeEventArgs e)
+    {
+        IntervalStart = e.Value?.ToString() ?? string.Empty;
+        ValidateIntervalInput();
+        await TryAutoApplyInterval();
+    }
+
+    private async Task OnIntervalEndChanged(ChangeEventArgs e)
+    {
+        IntervalEnd = e.Value?.ToString() ?? string.Empty;
+        ValidateIntervalInput();
+        await TryAutoApplyInterval();
+    }
+
+    private async Task TryAutoApplyInterval()
+{
+    if (!string.IsNullOrEmpty(SelectedCell)
+        && IntervalStart.Length == 14
+        && IntervalEnd.Length == 14
+        && string.IsNullOrEmpty(IntervalStartError)
+        && string.IsNullOrEmpty(IntervalEndError))
+    {
+        IsLoading = true;
+        StateHasChanged();
+        try
+        {
+            await Task.Delay(1);
+            AllRecords = GetFilteredRecords().ToList();
+            CurrentPage = 0;
+            
+            // NUEVO: También actualizar Fan Motor en auto-aplicación de intervalo
+            LastModelResults = await GetLastThreeModelRecordsAsync();
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+}
+
+    // ——— Validación de intervalo ———
+    private void ValidateIntervalInput()
+    {
+        // Start
+        IntervalStartError = string.Empty;
+        if (!string.IsNullOrEmpty(IntervalStart) && !IntervalStart.All(char.IsDigit))
+            IntervalStartError = "Start time must contain only digits";
+        else if (IntervalStart.Length > 0 && IntervalStart.Length < 14)
+            IntervalStartError = "Start time must be exactly 14 digits";
+
+        // End
+        IntervalEndError = string.Empty;
+        if (!string.IsNullOrEmpty(IntervalEnd) && !IntervalEnd.All(char.IsDigit))
+            IntervalEndError = "End time must contain only digits";
+        else if (IntervalEnd.Length > 0 && IntervalEnd.Length < 14)
+            IntervalEndError = "End time must be exactly 14 digits";
+    }
+   private async void OnFilterTypeChanged()
+{
+    ClearFilterInputs();
+    UpdateFilterValuesList();
+
+    // Limpiar mensajes de error
+    FilterValueError = string.Empty;
+    IntervalStartError = string.Empty;
+    IntervalEndError = string.Empty;
+
+    // Limpiar la tabla para que no queden registros viejos
+    AllRecords.Clear();
+    CurrentPage = 0;
+
+    // NUEVO: También limpiar Fan Motor cuando cambies el tipo de filtro
+    LastModelResults = await GetLastThreeModelRecordsAsync();
+
+    // Refrescar UI
+    StateHasChanged();
+}
+
+
+    private void ClearFilterInputs()
+    {
+        FilterValue = "";
+        IntervalStart = "";
+        IntervalEnd = "";
+    }
+
+    private void UpdateFilterValuesList()
+    {
+        FilterValuesList.Clear();
+
+        if (SelectedFilterType == "Interval" || string.IsNullOrEmpty(SelectedCell))
+            return;
+
+        // Raw times según celda
+        IQueryable<string> rawTimes = SelectedCell switch
+        {
+            "A" => context.Bal17.Select(r => r.Time).Union(context.Bal18.Select(r => r.Time)),
+            "B" => context.Bal15.Select(r => r.Time).Union(context.Bal16.Select(r => r.Time)),
+            "C" => context.Bal11.Select(r => r.Time).Union(context.Bal12.Select(r => r.Time)),
+            _ => Enumerable.Empty<string>().AsQueryable()
+        };
+
+        IEnumerable<string> transformed = SelectedFilterType switch
+        {
+            "Time" => rawTimes,
+            "Day" => rawTimes.Select(t => t.Length >= 8 ? t.Substring(0, 8) : t),
+            "Month" => rawTimes.Select(t => t.Length >= 6 ? t.Substring(0, 6) : t),
+            "Motor" => SelectedCell switch
+            {
+                "A" => context.Bal17.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)
+                           .Union(context.Bal18.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)),
+                "B" => context.Bal15.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)
+                           .Union(context.Bal16.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)),
+                "C" => context.Bal11.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)
+                           .Union(context.Bal12.Select(r => r.MotorCode.Length >= 13
+                                                  ? r.MotorCode.Substring(0, 13)
+                                                  : r.MotorCode)),
+                _ => Enumerable.Empty<string>()
+            },
+            _ => Enumerable.Empty<string>()
+        };
+
+        FilterValuesList = transformed
+            .Where(v => !string.IsNullOrEmpty(v))
+            .Distinct()
+            .OrderBy(v => v)
+            .ToList();
+    }
+
+    // Custom pagination methods
+    private void FirstPage()
+    {
+        CurrentPage = 0;
+    }
+
+    private void PreviousPage()
+    {
+        if (CurrentPage > 0)
+            CurrentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (CurrentPage < TotalPages - 1)
+            CurrentPage++;
+    }
+
+    private void LastPage()
+    {
+        CurrentPage = Math.Max(0, TotalPages - 1);
+    }
+
+    private void GoToPage(int pageNumber)
+    {
+        CurrentPage = pageNumber;
+    }
+
+    // When page size changes, reset to first page
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int newSize))
+        {
+            PageSize = newSize;
+            CurrentPage = 0;
+        }
+    }
+
+    // Column visibility methods
+    private void SelectAllColumns()
+    {
+        ShowTime = true;
+        ShowUser = true;
+        ShowMotorCode = true;
+        ShowFinalStatus = true;
+        ShowVoltage = true;
+        ShowCurrent = true;
+        ShowSpeed = true;
+        ShowStaticValue = true;  // Renamed from ShowStatic
+        ShowStaticAngle = true;
+        ShowCouple = true;
+        ShowCoupleAngle = true;
+        ShowUnbalance = true;
+        ShowCycleTime = true;
+        ShowPlane1 = true;
+        ShowUnbalancePlane2 = true;
+        ShowPlane2 = true;
+        ShowBalancingSpeed = true;
+        ShowLeftBlade = true;
+        ShowLeftRadius = true;
+        ShowLeftClip = true;
+        ShowRightBlade = true;
+        ShowRightRadius = true;
+        ShowRightClip = true;
+
+        StateHasChanged(); // Update UI after changing all columns
+    }
+
+    private void DeselectAllColumns()
+    {
+        ShowTime = false;
+        ShowUser = false;
+        ShowMotorCode = false;
+        ShowFinalStatus = false;
+        ShowVoltage = false;
+        ShowCurrent = false;
+        ShowSpeed = false;
+        ShowStaticValue = false;  // Renamed from ShowStatic
+        ShowStaticAngle = false;
+        ShowCouple = false;
+        ShowCoupleAngle = false;
+        ShowUnbalance = false;
+        ShowCycleTime = false;
+        ShowPlane1 = false;
+        ShowUnbalancePlane2 = false;
+        ShowPlane2 = false;
+        ShowBalancingSpeed = false;
+        ShowLeftBlade = false;
+        ShowLeftRadius = false;
+        ShowLeftClip = false;
+        ShowRightBlade = false;
+        ShowRightRadius = false;
+        ShowRightClip = false;
+
+        StateHasChanged(); // Update UI after changing all columns
+    }
+
+    // Métodos para los filtros de estado (nuevos)
+    private async Task SelectAllStatus()
+    {
+        ShowStatusPass = true;
+        ShowStatusFail = true;
+        ShowStatusReject = true;
+
+        // Refrescar con el nuevo método
+        await RefreshFilters();
+    }
+
+    private async Task DeselectAllStatus()
+    {
+        ShowStatusPass = false;
+        ShowStatusFail = false;
+        ShowStatusReject = false;
+
+        // Refrescar con el nuevo método
+        await RefreshFilters();
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        context = DbFactory.CreateDbContext();
+        UpdateFilterValuesList();
+
+        // Esto carga los últimos 3 datos al iniciar la página
+        LastModelResults = await GetLastThreeModelRecordsAsync();
+    }
+
+
+    public async ValueTask DisposeAsync()
+        => await context.DisposeAsync();
+}

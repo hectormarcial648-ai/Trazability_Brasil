@@ -1,0 +1,30 @@
+/* app.css */
+
+html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+a, .btn-link {
+    color: #006bb7;
+}
+
+/* Ejemplo de botón primario */
+.btn-primary {
+    color: #fff;
+    background-color: #1b6ec2;
+    border-color: #1861ac;
+}
+
+/* Estilos de contenido */
+.content {
+    padding-top: 1.1rem;
+}
+
+/* Media queries globales */
+@media (max-width: 48rem) {
+    .content {
+        padding: 1rem;
+    }
+}

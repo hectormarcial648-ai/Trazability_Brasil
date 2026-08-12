@@ -1,0 +1,128 @@
+﻿@page "/"
+@using System.DirectoryServices.AccountManagement
+@using System.Security.Principal
+
+<style>
+    .logo-img {
+        display: block;
+        margin: 20px auto;
+        max-width: 60%; /* Aumentado de 100% a un valor mayor */
+        width:280px; /* Ancho fijo en píxeles */
+        height: auto; /* Mantiene la proporción de aspecto */
+    }
+
+    .welcome-message {
+        text-align: center;
+        margin-top: 5px;
+    }
+</style>
+
+<PageTitle>Home</PageTitle>
+
+@code {
+    private string userName = "";
+    
+
+    protected override void OnInitialized()
+    {
+        Console.WriteLine("Inicializando Home.razor");
+        try
+        {
+            // Obtener el nombre de usuario de Windows
+            string domain = "JEHL";
+            string username = "mx1mdaz";  // AQUI SE ENCUENTRA UN BUG, PORQUE SIEMPRE ENTRA CON ESTE USUARIO
+
+            //Console.WriteLine($"Ya entró a primer try con dominio y usuario: {domain}, {username}");
+
+            // Intentar obtener el nombre completo usando DirectoryServices
+            try
+            {
+                // Para dominio
+                using (var context = new PrincipalContext(ContextType.Domain, domain))
+                {
+                    var user = UserPrincipal.FindByIdentity(context, IdentityType.SamAccountName, username);
+                    if (user != null)
+                    {
+                        // Intenta obtener el DisplayName primero
+                        if (!string.IsNullOrEmpty(user.DisplayName))
+                        {
+                            userName = user.DisplayName;
+                            return;
+                        }
+                        // Si no hay DisplayName, intenta con Name
+                        else if (!string.IsNullOrEmpty(user.Name))
+                        {
+                            userName = user.Name;
+                            return;
+                        }
+                        // Si no hay Name, intenta con GivenName + Surname
+                        else if (!string.IsNullOrEmpty(user.GivenName) || !string.IsNullOrEmpty(user.Surname))
+                        {
+                            userName = (user.GivenName ?? "") + " " + (user.Surname ?? "");
+                            userName = userName.Trim();
+                            if (!string.IsNullOrEmpty(userName))
+                                return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error en el primer catch: {ex.Message}");
+
+                // Intentar con contexto de máquina local si falla el dominio
+                try
+                {
+                    using (var context = new PrincipalContext(ContextType.Machine))
+                    {
+                        var user = UserPrincipal.FindByIdentity(context, IdentityType.SamAccountName, username);
+                        if (user != null)
+                        {
+                            if (!string.IsNullOrEmpty(user.DisplayName))
+                            {
+                                userName = user.DisplayName;
+                                return;
+                            }
+                            else if (!string.IsNullOrEmpty(user.Name))
+                            {
+                                userName = user.Name;
+                                return;
+                            }
+                            else if (!string.IsNullOrEmpty(user.GivenName) || !string.IsNullOrEmpty(user.Surname))
+                            {
+                                userName = (user.GivenName ?? "") + " " + (user.Surname ?? "");
+                                userName = userName.Trim();
+                                if (!string.IsNullOrEmpty(userName))
+                                    return;
+                            }
+                        }
+                    }
+                }
+                catch (Exception exep)
+                {
+                    // Si todo falla, simplemente usa el nombre de usuario
+                     Console.WriteLine($"Error en el segundo catch: {exep.Message}");
+                }
+            }
+
+            // Si todo lo anterior falla, usa el nombre de usuario simple
+            userName = username;
+        }
+        catch (Exception e)
+        {
+            userName = "Usuario";
+             Console.WriteLine($"Error en el ultimo catch, username = usuario {e.Message}");
+        }
+    }
+}
+
+<div class="container-fluid">
+    <div class="welcome-message">
+        <h1>WELCOME TO <span style="color: orange;">ARTEMIS</span></h1>
+    </div>
+
+    <!-- Imagen centrada debajo del texto de bienvenida -->
+    <div class="text-center">
+        <img src="/img/AutomationLogo2.png" class="logo-img" alt="Automation Logo">
+    </div>
+</div>

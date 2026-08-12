@@ -1,0 +1,24 @@
+/* NavMenu.css */
+
+/* Asegura que las opciones se muestren en una sola fila */
+.navbar-custom .navbar-nav {
+    flex-direction: row;
+    align-items: center;
+}
+
+/* Espaciado entre ítems */
+.navbar-custom .nav-item {
+    margin-right: 1rem;
+}
+
+/* Responsividad: en pantallas menores a 768px se activa scroll horizontal */
+@media (max-width: 48rem) {
+    .navbar-custom .navbar-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .navbar-custom .nav-item {
+        flex: 0 0 auto;
+    }
+}

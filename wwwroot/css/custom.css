@@ -1,0 +1,205 @@
+﻿/* Ajuste de pantalla pequeña */
+@media (max-width: 768px) {
+    .form-container {
+        flex-direction: column;
+        max-width: 90%; /* Ajustar el contenedor para pantallas pequeñas */
+    }
+
+    .form-column td {
+        font-size: 0.9rem; /* Ajuste de tamaño de fuente para pantallas pequeñas */
+        padding: 0.5rem; /* Reducir el espaciado interno en pantallas pequeñas */
+    }
+
+    .header-text {
+        font-size: 1.1rem; /* Ajustar el tamaño de fuente del encabezado */
+    }
+}
+
+/* Ajustes para el NavBar */
+.navbar-custom {
+    background: linear-gradient(to right, #ffffff 0%, #ffffff 10%, #FFA500 13%, #FFA500 100%);
+    padding: 0; /* Eliminar padding extra */
+    display: flex;
+    align-items: center;
+    width: 100%; /* Asegurar que el navbar ocupe todo el ancho */
+    flex-wrap: nowrap; /* Asegurar que los elementos no se envuelvan a la siguiente línea */
+}
+
+    /* Ajuste para el logo */
+    .navbar-custom .navbar-brand {
+        padding: 0; /* Eliminar padding para ajustar la imagen */
+        margin-right: 2rem; /* Aumentar margen derecho para crear espacio entre el logo y las opciones de navegación */
+        display: flex;
+        align-items: center;
+    }
+
+    .navbar-custom .navbar-logo {
+        height: 50px; /* Ajustar la altura de la imagen */
+        width: auto; /* Mantener la proporción de la imagen */
+        margin-left: 0; /* Alinear el logo al borde izquierdo */
+    }
+
+/* Ajuste para el contenedor colapsable */
+.navbar-collapse {
+    display: flex;
+    justify-content: space-between; /* Distribuir elementos uniformemente */
+    align-items: center;
+    width: 100%; /* Asegurar que la sección expandida ocupe todo el ancho */
+    flex-wrap: nowrap; /* Asegurar que los elementos no se envuelvan */
+}
+
+/* Ajustes para los elementos de navegación */
+.navbar-nav {
+    display: flex;
+    align-items: center;
+    flex-grow: 1; /* Expandir para ocupar todo el ancho posible */
+    flex-wrap: nowrap; /* Asegurar que los elementos de navegación no se envuelvan */
+    margin-right: auto; /* Mover los elementos de navegación más a la izquierda */
+    margin-left: 2rem; /* Aumentar margen izquierdo para desplazar las opciones a la derecha */
+}
+
+    .navbar-nav.ml-auto {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        margin-left: auto; /* Asegurar que los botones vayan al extremo derecho */
+    }
+
+/* Ajustes para los enlaces de navegación */
+.navbar-custom .nav-link {
+    color: #ffffff !important; /* Blanco */
+    margin: 0 8px; /* Añadir margen horizontal a los enlaces */
+    padding: 10px 15px; /* Añadir padding para espacio interior */
+    position: relative; /* Necesario para la línea separadora */
+    white-space: nowrap; /* Asegurar que no se quiebren las opciones en dos líneas */
+}
+
+    /* Línea separadora */
+    .navbar-custom .nav-link::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: -15px; /* Ajustar según el margen horizontal */
+        height: 100%;
+        border-right: 1px solid #ffffff; /* Línea separadora */
+    }
+
+    .navbar-custom .nav-link:last-child::after {
+        content: none; /* Eliminar línea separadora del último elemento */
+    }
+
+    /* Hover en los enlaces de navegación */
+    .navbar-custom .nav-link:hover {
+        color: #000000 !important; /* Negro */
+        background-color: rgba(255, 255, 255, 0.3); /* Blanco translúcido */
+        border-radius: 8px; /* Bordes redondeados */
+    }
+
+/* Botones Login y Signup */
+.btn-login, .btn-signup {
+    margin-left: 6px; /* Espacio entre botones */
+    white-space: nowrap; /* Asegurar que no se quiebren en pantallas pequeñas */
+}
+
+/* Botón Login */
+.btn-login {
+    background-color: #ffad16; /* Naranja más claro */
+    color: #ffffff; /* Blanco */
+    border: 1px solid #ffffff; /* Borde blanco */
+    transition: background-color 0.3s, color 0.3s; /* Transición suave */
+    padding: 8px 16px; /* Añadir padding para que coincida con el diseño original */
+}
+
+    .btn-login:hover {
+        background-color: #ffffff; /* Blanco */
+        color: #000000; /* Negro */
+    }
+
+/* Botón Signup */
+.btn-signup {
+    background-color: #FFA500; /* Naranja */
+    color: #ffffff; /* Blanco */
+    border: 1px solid #ffffff; /* Borde blanco */
+    padding: 8px 16px; /* Añadir padding para que coincida con el diseño original */
+}
+
+    .btn-signup:hover {
+        background-color: #ffffff; /* Blanco */
+        color: #000000; /* Negro */
+    }
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .navbar-custom {
+        background: linear-gradient(to right, #ffffff 0%, #ffffff 8%, #FFA500 10%, #FFA500 100%);
+        padding: 0; /* Eliminar padding extra */
+        margin-top: 0; /* Eliminar margen superior */
+        display: flex;
+        align-items: center;
+        width: 100%; /* Asegurar que el navbar ocupe todo el ancho */
+        flex-wrap: nowrap; /* Asegurar que los elementos no se envuelvan a la siguiente línea */
+    }
+
+        .navbar-custom .navbar-nav {
+            margin-left: 0; /* Eliminar el margen para pantallas pequeñas */
+            text-align: center;
+            justify-content: center;
+        }
+
+        .navbar-custom .nav-link {
+            margin: 5px 0; /* Reducir el margen para pantallas pequeñas */
+            padding: 8px 10px; /* Reducir el padding para pantallas pequeñas */
+        }
+
+        .navbar-custom .navbar-logo {
+            height: 40px; /* Reducir la altura de la imagen */
+        }
+
+        .navbar-custom .nav-link::after {
+            display: none; /* Eliminar la línea separadora para pantallas pequeñas */
+        }
+
+    .btn-login, .btn-signup {
+        width: 100%; /* Aumentar el ancho al 100% para pantallas pequeñas */
+        margin: 5px 0; /* Añadir margen vertical */
+    }
+}
+
+@media (max-width: 576px) {
+    .navbar-custom {
+        background: #FFA500; /* Fondo naranja sólido para pantallas extra pequeñas */
+        padding: 10px; /* Añadir padding */
+    }
+}
+
+/* Ajustes para el último elemento del nav-item */
+.nav-item:last-of-type {
+    padding-bottom: 1rem;
+}
+
+/* Estilos para los enlaces activos en Blazor */
+.nav-item .nav-link.active {
+    background-color: #ffffff !important; /* Blanco */
+    color: #000000 !important; /* Negro */
+    border-radius: 8px; /* Bordes redondeados */
+    padding: 10px 15px; /* Añadir padding adicional */
+    border: 2px solid #ffffff; /* Borde blanco */
+    transition: background-color 0.3s, color 0.3s; /* Transición suave */
+}
+
+/* Estilos para los enlaces al ser clicados o enfocados */
+.nav-item .nav-link:focus {
+    background-color: #ffffff !important; /* Blanco */
+    color: #000000 !important; /* Negro */
+    border-radius: 8px; /* Bordes redondeados */
+    padding: 10px 15px; /* Añadir padding adicional */
+    border: 2px solid #ffffff; /* Borde blanco */
+}
+
+/* Estilos para el hover de los enlaces de navegación en Blazor */
+.nav-item .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+    color: #000000 !important; /* Negro */
+    border-radius: 8px; /* Bordes redondeados */
+}
+
